@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RecoilRoot } from 'recoil';
 import { DndProvider } from 'react-dnd';
 import { RouterProvider } from 'react-router-dom';
@@ -11,6 +11,7 @@ import WakeLockManager from '~/components/System/WakeLockManager';
 import QueryDevtoolsGate from '~/components/QueryDevtoolsGate';
 import LanguageSync from '~/components/System/LanguageSync';
 import { getThemeFromEnv } from './utils/getThemeFromEnv';
+import { getDefaultBrandTheme } from '~/branding/theme';
 import { initializeFontSize } from '~/store/fontSize';
 import { LiveAnnouncer } from '~/a11y';
 import { router } from './routes';
@@ -45,6 +46,7 @@ const App = () => {
 
   // Load theme from environment variables if available
   const envTheme = getThemeFromEnv();
+  const [brandTheme] = useState(getDefaultBrandTheme);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -52,15 +54,9 @@ const App = () => {
         <LanguageSync />
         <LiveAnnouncer>
           <ThemeProvider
-            // Only pass initialTheme and themeRGB if environment theme exists
-            // This allows localStorage values to persist when no env theme is set
-            {...(envTheme && { initialTheme: 'system', themeRGB: envTheme })}
+            {...(envTheme ? { themeRGB: envTheme } : { themeDefinition: brandTheme })}
+            persistThemeDefinition={false}
           >
-            {/* The ThemeProvider will automatically:
-                1. Apply dark/light mode classes
-                2. Apply custom theme colors if envTheme is provided
-                3. Otherwise use stored theme preferences from localStorage
-                4. Fall back to default theme colors if nothing is stored */}
             <RadixToast.Provider>
               <ToastProvider>
                 <DndProvider backend={HTML5Backend}>

@@ -4,6 +4,7 @@ import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import SocialLoginRender from './SocialLoginRender';
 import { BlinkAnimation } from './BlinkAnimation';
+import Brand from '~/branding/Brand';
 import { Banner } from '../Banners';
 import Footer from './Footer';
 
@@ -60,24 +61,20 @@ function AuthLayout({
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-surface-primary">
+    <div className="relative flex min-h-screen flex-col bg-surface-secondary">
       <Banner />
       <BlinkAnimation active={isFetching}>
-        <div className="mt-6 h-10 w-full bg-cover">
-          <img
-            src="assets/logo.svg"
-            className="h-full w-full object-contain"
-            alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? 'LibreChat' })}
-          />
+        <div className="mx-auto mb-8 mt-10 w-full max-w-md px-6 sm:mt-16">
+          <Brand />
         </div>
       </BlinkAnimation>
       <DisplayError />
-      <div className="absolute bottom-0 left-0 md:m-4">
+      <div className="absolute right-3 top-3">
         <ThemeSelector />
       </div>
 
-      <main className="flex flex-grow items-center justify-center">
-        <div className="w-authPageWidth overflow-hidden bg-surface-primary px-6 py-4 sm:max-w-md sm:rounded-lg">
+      <main className="flex flex-grow items-start justify-center px-4 pb-10">
+        <div className="w-full max-w-md rounded-xl border border-border-light bg-surface-primary px-6 py-8 shadow-sm sm:px-10">
           {!hasStartupConfigError && !isFetching && header && (
             <h1
               className="mb-4 text-center text-3xl font-semibold text-text-primary"
