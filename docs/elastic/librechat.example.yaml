@@ -5,6 +5,8 @@ elasticAdapter:
   kibanaUrl: '${ELASTIC_KIBANA_URL}'
   spaceId: '${ELASTIC_SPACE_ID}'
   agentId: '${ELASTIC_AGENT_ID}'
+  # Optional override; otherwise reads ELASTIC_CONNECTOR_ID from .env when set.
+  # connectorId: 'your-kibana-connector-id'
   apiKeyEnv: ELASTIC_API_KEY
   adapterKeyEnv: ELASTIC_ADAPTER_KEY
   host: 127.0.0.1

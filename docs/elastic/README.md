@@ -25,6 +25,7 @@ Add these values to your root `.env` (keep it out of git):
 ELASTIC_KIBANA_URL=https://your-kibana.example.com:9243
 ELASTIC_SPACE_ID=your-team-space-id
 ELASTIC_AGENT_ID=your-agent-id
+ELASTIC_CONNECTOR_ID=
 ELASTIC_API_KEY=your-encoded-elasticsearch-api-key
 ELASTIC_ADAPTER_KEY=your-separate-random-adapter-secret
 ```
@@ -47,6 +48,16 @@ npm run backend
 
 Open http://localhost:3080, select **Elastic → elastic-agent**, and send a message. `curl http://127.0.0.1:3091/healthz` checks that the adapter is listening (it does not test Elastic credentials).
 
+## Choose a model connector
+
+Set `ELASTIC_CONNECTOR_ID` in `.env` to the **Kibana connector ID**, not its display name or model name, then restart the adapter. Leave it empty or unset to use Elastic's default connector. Existing YAML files need no changes. The selected connector determines the model routing; LibreChat still shows `Elastic → elastic-agent`.
+
+An optional `elasticAdapter.connectorId` in YAML overrides the environment setting and accepts a literal or `${ENV_VAR}`. An explicitly empty YAML value (`connectorId: ''`) uses Elastic's default even when the environment variable is set.
+
+After installing this update, build once with `npm run build:data-provider && npm run build:api`. Subsequent connector changes only require restarting `npm run elastic-adapter`.
+
+Switching connector IDs starts a fresh Elastic conversation with the visible LibreChat transcript. Start a new LibreChat chat if you do not want to pass prior context to the new connector.
+
 ## Change teams or agents
 
 Edit `ELASTIC_SPACE_ID`, `ELASTIC_AGENT_ID` or `ELASTIC_KIBANA_URL` in `.env`, then restart **the adapter**. No rebuild is needed. You can also put literal values directly in the `elasticAdapter` YAML section instead of `${...}` placeholders. Changes to the endpoint URL, model name or adapter secret also require restarting LibreChat.
@@ -67,19 +78,20 @@ Conversation mappings are scoped to Kibana URL, space, agent, API-key identity, 
 
 All settings are validated under `elasticAdapter` in `librechat.yaml`:
 
-| Setting                | Default / purpose                                       |
-| ---------------------- | ------------------------------------------------------- |
-| `kibanaUrl`, `agentId` | Required; literals or `${ENV_VAR}`                      |
-| `spaceId`              | `default`; literal or `${ENV_VAR}`                      |
-| `apiKeyEnv`            | `ELASTIC_API_KEY`                                       |
-| `adapterKeyEnv`        | `ELASTIC_ADAPTER_KEY`                                   |
-| `host`, `port`         | `127.0.0.1`, `3091`                                     |
-| `model`                | `elastic-agent`; must match the custom endpoint's model |
-| `timeoutMs`            | `120000`                                                |
-| `maxRequestBytes`      | `1048576`                                               |
-| `maxResponseBytes`     | `4194304`                                               |
-| `maxConcurrent`        | `8`                                                     |
-| `stateDir`             | `./data/elastic-adapter` relative to working directory  |
+| Setting                | Default / purpose                                                      |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `kibanaUrl`, `agentId` | Required; literals or `${ENV_VAR}`                                     |
+| `spaceId`              | `default`; literal or `${ENV_VAR}`                                     |
+| `connectorId`          | Optional; falls back to `ELASTIC_CONNECTOR_ID`, then Elastic's default |
+| `apiKeyEnv`            | `ELASTIC_API_KEY`                                                      |
+| `adapterKeyEnv`        | `ELASTIC_ADAPTER_KEY`                                                  |
+| `host`, `port`         | `127.0.0.1`, `3091`                                                    |
+| `model`                | `elastic-agent`; must match the custom endpoint's model                |
+| `timeoutMs`            | `120000`                                                               |
+| `maxRequestBytes`      | `1048576`                                                              |
+| `maxResponseBytes`     | `4194304`                                                              |
+| `maxConcurrent`        | `8`                                                                    |
+| `stateDir`             | `./data/elastic-adapter` relative to working directory                 |
 
 For an internal certificate authority, start Node with `NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem`. Certificate verification stays enabled. Redirects from Kibana are rejected so API credentials cannot be forwarded to another host.
 

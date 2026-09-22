@@ -34,7 +34,13 @@ export function createAdapterApp(
   app.disable('x-powered-by');
   const active = new Set<string>();
   const namespace = digest(
-    JSON.stringify([config.kibanaUrl, config.spaceId, config.agentId, digest(config.apiKey)]),
+    JSON.stringify([
+      config.kibanaUrl,
+      config.spaceId,
+      config.agentId,
+      digest(config.apiKey),
+      ...(config.connectorId ? [config.connectorId] : []),
+    ]),
   );
   const expectedKey = Buffer.from(digest(`Bearer ${config.adapterKey}`));
   app.get('/healthz', (_req, res) => {

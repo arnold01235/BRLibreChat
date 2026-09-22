@@ -18,7 +18,7 @@ interface RecordedRequest {
   path: string;
   authorization?: string;
   csrf?: string;
-  body: { input: string; agent_id: string; conversation_id?: string };
+  body: { input: string; agent_id: string; conversation_id?: string; connector_id?: string };
 }
 
 const headers = {
@@ -153,6 +153,30 @@ test('preserves linear history after an adapter restart and forwards only the ne
     conversation_id: 'elastic-1',
     agent_id: 'troubleshooter',
   });
+});
+
+test('forwards the selected connector on initial requests and follow-ups', async () => {
+  await close(adapter);
+  config = { ...config, connectorId: 'connector-a' };
+  await startAdapter();
+  expect((await send()).status).toBe(200);
+  expect((await send(followup)).status).toBe(200);
+  expect(calls.map((call) => call.body.connector_id)).toEqual(['connector-a', 'connector-a']);
+  expect(calls[1].body.conversation_id).toBe('elastic-1');
+});
+
+test('switching connectors starts fresh upstream history', async () => {
+  await send();
+  for (const connectorId of ['connector-a', 'connector-b']) {
+    await close(adapter);
+    config = { ...config, connectorId };
+    await startAdapter();
+    expect((await send(followup)).status).toBe(200);
+    const body = calls[calls.length - 1].body;
+    expect(body.connector_id).toBe(connectorId);
+    expect(body.conversation_id).toBeUndefined();
+    expect(body.input).toContain('Check service A');
+  }
 });
 
 test('isolates users, tenants and separate LibreChat chats', async () => {
@@ -345,6 +369,28 @@ test('loads the documented YAML through the shared config schema and expands tar
       ELASTIC_KIBANA_URL: 'https://kibana.example.com/s/team-a',
     }),
   ).rejects.toThrow('base URL');
+});
+
+test('loads optional connector environment settings and YAML overrides', async () => {
+  const filename = path.join(directory, 'connector.yaml');
+  const env = { ELASTIC_API_KEY: 'key', ELASTIC_ADAPTER_KEY: 'a'.repeat(40) };
+  const yaml = 'elasticAdapter:\n  kibanaUrl: https://kibana.example.com\n  agentId: agent-a\n';
+  await writeFile(filename, yaml);
+  expect((await loadAdapterSettings(filename, env)).connectorId).toBeUndefined();
+  expect(
+    (await loadAdapterSettings(filename, { ...env, ELASTIC_CONNECTOR_ID: '  ' })).connectorId,
+  ).toBeUndefined();
+  const selectedEnv = { ...env, ELASTIC_CONNECTOR_ID: ' connector-env ' };
+  expect((await loadAdapterSettings(filename, selectedEnv)).connectorId).toBe('connector-env');
+  await writeFile(filename, yaml + '  connectorId: connector-yaml\n');
+  expect((await loadAdapterSettings(filename, selectedEnv)).connectorId).toBe('connector-yaml');
+  await writeFile(filename, yaml + '  connectorId: "${CUSTOM_CONNECTOR}"\n');
+  expect(
+    (await loadAdapterSettings(filename, { ...selectedEnv, CUSTOM_CONNECTOR: 'custom' }))
+      .connectorId,
+  ).toBe('custom');
+  await writeFile(filename, yaml + '  connectorId: ""\n');
+  expect((await loadAdapterSettings(filename, selectedEnv)).connectorId).toBeUndefined();
 });
 
 test('streaming upstream errors reject through the OpenAI SDK', async () => {
