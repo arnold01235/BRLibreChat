@@ -1,6 +1,7 @@
 import React, { forwardRef } from 'react';
 import { useWatch } from 'react-hook-form';
-import { composerSubmitClasses, SendIcon, TooltipAnchor } from '@librechat/client';
+import { ArrowUpIcon } from '@navikt/aksel-icons';
+import { composerSubmitClasses, TooltipAnchor } from '@librechat/client';
 import type { Control } from 'react-hook-form';
 import { isSubmittableMessage } from '~/utils';
 import { useLocalize } from '~/hooks';
@@ -29,7 +30,7 @@ const SubmitButton = React.memo(
             type="submit"
           >
             <span className="" data-state="closed">
-              <SendIcon size={24} />
+              <ArrowUpIcon fontSize={24} className="text-surface-primary" aria-hidden="true" />
             </span>
           </button>
         }

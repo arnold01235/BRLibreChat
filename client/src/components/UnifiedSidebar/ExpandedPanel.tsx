@@ -1,7 +1,7 @@
 import { memo, useCallback, lazy, Suspense } from 'react';
 import { useRecoilValue } from 'recoil';
-import { SquarePen } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { PencilIcon } from '@navikt/aksel-icons';
 import { Skeleton, Sidebar, Button, TooltipAnchor } from '@librechat/client';
 import type { NavLink } from '~/common';
 import { useShortcutAriaKey, useShortcutHint } from '~/hooks/useKeyboardShortcuts';
@@ -46,7 +46,7 @@ const NewChatButton = memo(function NewChatButton({
           className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-surface-hover"
           onClick={handleNewChatClick}
         >
-          <SquarePen className="h-5 w-5 text-text-primary" />
+          <PencilIcon className="h-5 w-5 text-text-primary" aria-hidden="true" />
         </a>
       }
     />
