@@ -46,6 +46,30 @@ test('accepts a completed answer without any activity events', async () => {
   });
 });
 
+test('captures title metadata arriving after the round without changing the answer', async () => {
+  const event =
+    'event: conversation_created\ndata: ' +
+    JSON.stringify({
+      data: { conversation_id: 'created', title: '  Feilsøking\n av APM  ' },
+    }) +
+    '\n\n';
+  expect(await readElasticStream(response(round + event), config)).toEqual({
+    conversation_id: 'created',
+    response: { message: 'Healthy' },
+    title: 'Feilsøking av APM',
+  });
+});
+
+test.each(['', ' ', 'x'.repeat(201), 'secret-key exposed'])(
+  'ignores unusable titles without failing the answer: %s',
+  async (title) => {
+    const event = 'event: conversation_updated\ndata: ' + JSON.stringify({ title }) + '\n\n';
+    expect(await readElasticStream(response(round + event), config, 'existing')).not.toHaveProperty(
+      'title',
+    );
+  },
+);
+
 test('accepts CR-only line endings including the final delimiter', async () => {
   expect(
     await readElasticStream(response(round.replace(/\n/g, '\r')), config, 'existing'),

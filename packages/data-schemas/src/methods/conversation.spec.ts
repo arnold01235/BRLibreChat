@@ -158,6 +158,23 @@ describe('Conversation Operations', () => {
   });
 
   describe('saveConvo', () => {
+    it('atomically saves a generated title only while the conversation is still untitled', async () => {
+      const conversationId = mockConversationData.conversationId;
+      await saveConvo(mockCtx, { ...mockConversationData, title: 'New Chat' });
+      const options = { expectedTitle: 'New Chat', appendMessageIds: [] };
+      expect(
+        await saveConvo(mockCtx, { conversationId, title: 'Elastic title' }, options),
+      ).toMatchObject({ title: 'Elastic title' });
+      await saveConvo(mockCtx, { conversationId, title: 'My manual title' });
+      expect(await saveConvo(mockCtx, { conversationId, title: 'Late title' }, options)).toBeNull();
+      expect(await Conversation.findOne({ conversationId }).lean()).toMatchObject({
+        title: 'My manual title',
+      });
+      await Conversation.deleteOne({ conversationId });
+      expect(await saveConvo(mockCtx, { conversationId, title: 'Late title' }, options)).toBeNull();
+      expect(await Conversation.countDocuments({ conversationId })).toBe(0);
+    });
+
     it('should save a conversation for an authenticated user', async () => {
       const result = await saveConvo(mockCtx, mockConversationData);
 

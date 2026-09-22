@@ -63,7 +63,10 @@ export function createAdapterApp(
   });
   app.post('/v1/chat/completions', async (req, res) => {
     const parsed = completionSchema.safeParse(req.body);
-    if (!parsed.success || parsed.data.model !== config.model) {
+    if (
+      !parsed.success ||
+      (parsed.data.model !== config.model && parsed.data.model !== config.titleModel)
+    ) {
       sendError(
         res,
         400,
@@ -80,6 +83,40 @@ export function createAdapterApp(
     const key = digest(
       JSON.stringify([namespace, req.get('x-librechat-tenant-id') ?? '', user, conversation]),
     );
+    if (parsed.data.model === config.titleModel) {
+      try {
+        if (parsed.data.stream) {
+          sendError(
+            res,
+            400,
+            'Title lookup requires a non-streaming completion. Set titleMethod to completion and titleTiming to final.',
+          );
+          return;
+        }
+        const state = await store.read(key);
+        if (!state?.title) {
+          sendError(res, 404, 'Elastic has not supplied a saved title for this conversation.');
+          return;
+        }
+        res.json({
+          id: `chatcmpl-${randomUUID()}`,
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: config.titleModel,
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: state.title },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        });
+      } catch {
+        sendError(res, 500, 'Unable to read the saved Elastic title.');
+      }
+      return;
+    }
     if (active.has(key)) {
       sendError(res, 409, 'A request is already running for this conversation.');
       return;
@@ -154,6 +191,9 @@ export function createAdapterApp(
       controller.signal.throwIfAborted();
       await store.write(key, {
         conversationId: reply.conversation_id,
+        ...(config.titleModel && (reply.title || (continues && previous?.title))
+          ? { title: reply.title || previous?.title }
+          : {}),
         history: historyDigest([
           ...messages,
           { role: 'assistant', content: reply.response.message },

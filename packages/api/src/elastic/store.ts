@@ -4,7 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { AdapterError } from './protocol';
 
-const stateSchema = z.object({ conversationId: z.string().min(1), history: z.string().length(64) });
+const stateSchema = z.object({
+  conversationId: z.string().min(1),
+  history: z.string().length(64),
+  title: z.string().min(1).max(200).optional(),
+});
 export type ConversationState = z.infer<typeof stateSchema>;
 
 export interface ConversationStore {

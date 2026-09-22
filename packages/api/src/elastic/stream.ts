@@ -5,6 +5,7 @@ import { AdapterError } from './protocol';
 
 const eventSchema = z.object({
   conversation_id: z.string().optional(),
+  title: z.string().optional().catch(undefined),
   reasoning: z.string().optional(),
   message: z.string().optional(),
   tool_id: z.string().optional(),
@@ -33,6 +34,7 @@ export async function readElasticStream(
   let data: string[] = [];
   let size = 0;
   let answer: string | undefined;
+  let title: string | undefined;
   const emit = (text: string): void => {
     for (const secret of [config.apiKey, config.adapterKey]) {
       text = text.split(secret).join('[REDACTED]');
@@ -80,6 +82,17 @@ export async function readElasticStream(
     }
     if (parsed.conversation_id) {
       conversationId = parsed.conversation_id;
+    }
+    if (kind === 'conversation_created' || kind === 'conversation_updated') {
+      const candidate = parsed.title?.replace(/\s+/g, ' ').trim();
+      if (
+        candidate &&
+        candidate.length <= 200 &&
+        !candidate.includes(config.apiKey) &&
+        !candidate.includes(config.adapterKey)
+      ) {
+        title = candidate;
+      }
     }
     if (kind === 'reasoning' && parsed.reasoning) {
       emit(parsed.reasoning);
@@ -147,7 +160,11 @@ export async function readElasticStream(
         'Elastic stream ended without a completed round. Interactive approvals are unsupported; retry explicitly.',
       );
     }
-    return { conversation_id: conversationId, response: { message: answer } };
+    return {
+      conversation_id: conversationId,
+      response: { message: answer },
+      ...(title ? { title } : {}),
+    };
   } finally {
     await reader.cancel();
   }
