@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AdapterSettings } from './config';
+import { readElasticStream } from './stream';
 import { AdapterError } from './protocol';
 
 export interface ElasticReply {
@@ -11,6 +12,7 @@ export interface ElasticClient {
     input: string,
     conversationId: string | undefined,
     signal: AbortSignal,
+    onActivity?: (text: string) => void,
   ): Promise<ElasticReply>;
 }
 
@@ -26,8 +28,8 @@ export function createElasticClient(config: AdapterSettings, request = fetch): E
       : '';
   const url = `${config.kibanaUrl}${space}/api/agent_builder/converse`;
   return {
-    async converse(input, conversationId, signal) {
-      const response = await request(url, {
+    async converse(input, conversationId, signal, onActivity) {
+      const response = await request(config.showActivity ? `${url}/async` : url, {
         method: 'POST',
         redirect: 'error',
         signal,
@@ -47,14 +49,18 @@ export function createElasticClient(config: AdapterSettings, request = fetch): E
         await response.body?.cancel();
         let hint = 'Check Elastic availability and retry explicitly.';
         if (response.status === 401 || response.status === 403) {
-          hint = 'Check the Elastic API key and its agent, space and data permissions.';
+          hint =
+            'Check the Elastic API key, inference permissions and model connector credentials.';
         } else if (response.status === 404) {
-          hint = 'Check the Kibana URL, space ID and agent ID.';
+          hint = 'Check the Kibana URL, space ID, agent ID and connector/inference ID and access.';
         }
         throw new AdapterError(
           response.status === 429 ? 429 : 502,
           `Elastic returned HTTP ${response.status}. ${hint}`,
         );
+      }
+      if (config.showActivity) {
+        return readElasticStream(response, config, conversationId, onActivity);
       }
       const reader = response.body?.getReader();
       if (!reader) {

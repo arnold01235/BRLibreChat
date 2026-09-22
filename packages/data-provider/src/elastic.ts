@@ -6,6 +6,7 @@ export const elasticAdapterSchema = z
     spaceId: z.string().default('default'),
     agentId: z.string().min(1),
     connectorId: z.string().optional(),
+    showActivity: z.boolean().default(false),
     apiKeyEnv: z.string().min(1).default('ELASTIC_API_KEY'),
     adapterKeyEnv: z.string().min(1).default('ELASTIC_ADAPTER_KEY'),
     model: z.string().min(1).default('elastic-agent'),

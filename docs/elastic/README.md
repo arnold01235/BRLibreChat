@@ -58,6 +58,24 @@ After installing this update, build once with `npm run build:data-provider && np
 
 Switching connector IDs starts a fresh Elastic conversation with the visible LibreChat transcript. Start a new LibreChat chat if you do not want to pass prior context to the new connector.
 
+## Show live agent activity
+
+Add `showActivity: true` inside your existing `elasticAdapter` section in `librechat.yaml` (the example already enables it):
+
+```yaml
+elasticAdapter:
+  # Keep your existing URL, agent, space and other settings here.
+  showActivity: true
+```
+
+After pulling this update, run `npm run build:data-provider && npm run build:api`, then restart the adapter. No frontend rebuild is needed. Existing configurations default to `false` and retain the synchronous API.
+
+With activity enabled, the adapter calls Elastic's `/api/agent_builder/converse/async`. Expand LibreChat's existing Thinking/Thoughts section to see Elastic's public reasoning messages, tool names and tool progress as they arrive. `▶` marks a tool invocation and `■` marks returned results (not necessarily successful results). This is an activity transcript, not a guarantee of access to the model's internal reasoning. LibreChat's existing Show Thinking setting controls automatic expansion.
+
+Activity is delivered as `reasoning_content` and uses LibreChat's existing rendering and chat persistence. Tool arguments, raw results and raw upstream error bodies are not forwarded. Public progress messages may still contain data from your agent; enabling this makes those messages visible to users and retained in their chat history. The adapter's separate state files still store only conversation IDs and history hashes. Activity is excluded from the visible transcript replayed to Elastic.
+
+The final answer appears after Elastic completes the round. An interrupted or failed round is reported as an error without saving its conversation mapping; retrying starts fresh upstream history. No automatic retries or fallback requests are sent. Empty activity produces a normal answer without an empty panel. Non-streaming clients receive activity alongside the final answer rather than live updates.
+
 ## Change teams or agents
 
 Edit `ELASTIC_SPACE_ID`, `ELASTIC_AGENT_ID` or `ELASTIC_KIBANA_URL` in `.env`, then restart **the adapter**. No rebuild is needed. You can also put literal values directly in the `elasticAdapter` YAML section instead of `${...}` placeholders. Changes to the endpoint URL, model name or adapter secret also require restarting LibreChat.
@@ -67,7 +85,7 @@ Conversation mappings are scoped to Kibana URL, space, agent, API-key identity, 
 ## Behaviour and limits
 
 - Text chat and follow-ups are supported. The configured Elastic agent handles tool execution. Do not attach LibreChat tools to this endpoint; image/file attachments, tool-role messages and interactive Elastic approvals are rejected rather than silently executed or discarded.
-- Answers use Elastic's synchronous Converse API. LibreChat receives a waiting stream with keep-alives, then the complete text answer; this is not token-by-token Elastic streaming. Tool traces, Kibana dashboards and interactive approval controls are not rendered in LibreChat.
+- With `showActivity: false`, answers use Elastic's synchronous Converse API and LibreChat receives keep-alives followed by the complete answer. With `showActivity: true`, public activity is streamed live through the asynchronous API, followed by the complete answer. Raw tool results, Kibana dashboards and interactive approval controls are not rendered.
 - Successful linear follow-ups send only the latest user message and the stored Elastic conversation ID. Mappings survive adapter restarts and contain only conversation IDs and history hashes, not message text.
 - Editing, regenerating, branching, changing the supplied history or losing the mapping starts a fresh Elastic conversation with the visible text transcript. Past tool calls are not individually replayed. LibreChat system/developer messages are included as user-provided context, not as overrides of the Elastic agent's instructions. Model sampling controls are not applied to the agent.
 - Requests are never automatically retried by the adapter; the example disables LibreChat's provider retries. Cancelling in LibreChat aborts the HTTP request, but **does not guarantee that Elastic stops its work**. Timeout/disconnect invalidates the mapping before reuse to avoid appending to uncertain upstream state. An explicit retry may execute tools again; use read-only troubleshooting tools for this workflow.
@@ -83,6 +101,7 @@ All settings are validated under `elasticAdapter` in `librechat.yaml`:
 | `kibanaUrl`, `agentId` | Required; literals or `${ENV_VAR}`                                     |
 | `spaceId`              | `default`; literal or `${ENV_VAR}`                                     |
 | `connectorId`          | Optional; falls back to `ELASTIC_CONNECTOR_ID`, then Elastic's default |
+| `showActivity`         | `false`; stream public activity into LibreChat's Thinking section      |
 | `apiKeyEnv`            | `ELASTIC_API_KEY`                                                      |
 | `adapterKeyEnv`        | `ELASTIC_ADAPTER_KEY`                                                  |
 | `host`, `port`         | `127.0.0.1`, `3091`                                                    |
@@ -95,12 +114,13 @@ All settings are validated under `elasticAdapter` in `librechat.yaml`:
 
 For an internal certificate authority, start Node with `NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem`. Certificate verification stays enabled. Redirects from Kibana are rejected so API credentials cannot be forwarded to another host.
 
-401 from the adapter means its shared secret does not match LibreChat's `apiKey`. An Elastic 401/403 error means check the Elastic key and space/agent/data privileges. Elastic 404 means check the base URL, space ID and agent ID. 504 means the configured timeout elapsed. Logs and error responses do not include Elastic response bodies, prompts or API keys.
+401 from the adapter means its shared secret does not match LibreChat's `apiKey`. An Elastic 401/403 error means check the Elastic key, space/agent/data privileges and model connector credentials. Inference endpoints require the `monitor_inference` cluster privilege. Elastic 404 means check the base URL, space ID, agent ID and connector/inference ID and access. 504 means the configured timeout elapsed. Logs and error responses do not include Elastic response bodies, prompts or API keys. `maxResponseBytes` bounds the entire upstream response, including all SSE events and tool results when activity is enabled.
 
 ## Verification and API references
 
 The automated adapter tests use a local HTTP server in place of Elastic; they do not require access to your team's deployment. Live verification against your configured agent is still required.
 
 - [Elastic Converse API](https://www.elastic.co/docs/api/doc/kibana/operation/operation-post-agent-builder-converse)
+- [Elastic streaming Converse API](https://www.elastic.co/docs/api/doc/kibana/operation/operation-post-agent-builder-converse-async)
 - [Elastic API overview and Spaces](https://www.elastic.co/docs/explore-analyze/ai-features/agent-builder/kibana-api)
 - [Agent Builder API keys](https://www.elastic.co/docs/explore-analyze/ai-features/agent-builder/api-keys)
