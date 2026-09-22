@@ -5,6 +5,7 @@ export const elasticAdapterSchema = z
     kibanaUrl: z.string().min(1),
     spaceId: z.string().default('default'),
     agentId: z.string().min(1),
+    connectorId: z.string().optional(),
     apiKeyEnv: z.string().min(1).default('ELASTIC_API_KEY'),
     adapterKeyEnv: z.string().min(1).default('ELASTIC_ADAPTER_KEY'),
     model: z.string().min(1).default('elastic-agent'),

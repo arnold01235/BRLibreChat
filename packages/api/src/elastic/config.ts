@@ -36,6 +36,11 @@ export async function loadAdapterSettings(
     kibanaUrl: expand(config.kibanaUrl).replace(/\/+$/, ''),
     spaceId: expand(config.spaceId),
     agentId: expand(config.agentId),
+    connectorId:
+      (config.connectorId === undefined
+        ? env.ELASTIC_CONNECTOR_ID
+        : expand(config.connectorId)
+      )?.trim() || undefined,
     apiKey,
     adapterKey,
   };

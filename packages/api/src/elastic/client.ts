@@ -36,7 +36,12 @@ export function createElasticClient(config: AdapterSettings, request = fetch): E
           'kbn-xsrf': 'true',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ agent_id: config.agentId, input, conversation_id: conversationId }),
+        body: JSON.stringify({
+          agent_id: config.agentId,
+          input,
+          conversation_id: conversationId,
+          ...(config.connectorId ? { connector_id: config.connectorId } : {}),
+        }),
       });
       if (!response.ok) {
         await response.body?.cancel();
