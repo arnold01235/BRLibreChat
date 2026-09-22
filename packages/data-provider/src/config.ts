@@ -22,6 +22,7 @@ import {
   MIN_BALANCE_RESERVATION_TTL_MS,
   DEFAULT_BALANCE_RESERVATION_TTL_MS,
 } from './balance';
+import { elasticAdapterSchema } from './elastic';
 
 export const AGENT_BACKGROUND_COMPLETION_RESULT_MAX_CHARS_DEFAULT = 24 * 1024;
 export const AGENT_BACKGROUND_COMPLETION_RESULT_MAX_CHARS_HARD_MAX = 64 * 1024;
@@ -2906,6 +2907,7 @@ export const openIdDiscoverySchema = z.object({
 export type TOpenIdDiscoveryConfig = z.infer<typeof openIdDiscoverySchema>;
 
 export const configSchema = z.object({
+  elasticAdapter: elasticAdapterSchema.optional(),
   version: z.string(),
   cache: z.boolean().default(true),
   ocr: ocrSchema.optional(),
@@ -4461,3 +4463,6 @@ export function getDefaultParamsEndpoint(
   }
   return endpointsConfig[endpoint]?.customParams?.defaultParamsEndpoint;
 }
+
+export { elasticAdapterSchema } from './elastic';
+export type { ElasticAdapterConfig } from './elastic';

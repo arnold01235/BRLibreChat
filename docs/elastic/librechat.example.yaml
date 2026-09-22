@@ -1,0 +1,31 @@
+version: 1.3.5
+cache: true
+
+elasticAdapter:
+  kibanaUrl: '${ELASTIC_KIBANA_URL}'
+  spaceId: '${ELASTIC_SPACE_ID}'
+  agentId: '${ELASTIC_AGENT_ID}'
+  apiKeyEnv: ELASTIC_API_KEY
+  adapterKeyEnv: ELASTIC_ADAPTER_KEY
+  host: 127.0.0.1
+  port: 3091
+  model: elastic-agent
+  timeoutMs: 120000
+  stateDir: ./data/elastic-adapter
+
+endpoints:
+  custom:
+    - name: Elastic
+      apiKey: '${ELASTIC_ADAPTER_KEY}'
+      baseURL: http://127.0.0.1:3091/v1
+      models:
+        default: [elastic-agent]
+        fetch: false
+      headers:
+        X-LibreChat-User-Id: '{{LIBRECHAT_USER_ID}}'
+        X-LibreChat-Tenant-Id: '{{LIBRECHAT_USER_TENANTID}}'
+        X-LibreChat-Conversation-Id: '{{LIBRECHAT_BODY_CONVERSATIONID}}'
+      titleConvo: false
+      modelDisplayLabel: Elastic Agent
+      addParams:
+        maxRetries: 0
