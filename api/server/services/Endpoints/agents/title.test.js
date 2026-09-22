@@ -39,6 +39,7 @@ describe('agents addTitle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCacheStore.clear();
+    mockSaveConvo.mockImplementation(async (_context, data) => ({ ...data }));
   });
 
   it('uses the explicit conversationId for the cache key and saveConvo (immediate mode)', async () => {
@@ -63,6 +64,24 @@ describe('agents addTitle', () => {
       expect.objectContaining({ noUpsert: true }),
     );
   });
+
+  it.each([null, { message: 'Error saving conversation' }])(
+    'does not publish rejected final title saves: %s',
+    async (result) => {
+      mockSaveConvo.mockResolvedValue(result);
+      await addTitle(makeReq(), {
+        text: 'hello',
+        client: makeClient('Late title'),
+        conversationId: 'cid',
+      });
+      expect(mockSaveConvo).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ expectedTitle: 'New Chat', noUpsert: true }),
+      );
+      expect(mockCache.set).not.toHaveBeenCalled();
+    },
+  );
 
   it('passes immediate:true through to client.titleConvo', async () => {
     const client = makeClient();

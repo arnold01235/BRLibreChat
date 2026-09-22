@@ -6,6 +6,7 @@ import { AdapterError } from './protocol';
 export interface ElasticReply {
   conversation_id: string;
   response: { message: string };
+  title?: string;
 }
 export interface ElasticClient {
   converse(
@@ -29,7 +30,8 @@ export function createElasticClient(config: AdapterSettings, request = fetch): E
   const url = `${config.kibanaUrl}${space}/api/agent_builder/converse`;
   return {
     async converse(input, conversationId, signal, onActivity) {
-      const response = await request(config.showActivity ? `${url}/async` : url, {
+      const useStream = config.showActivity || !!config.titleModel;
+      const response = await request(useStream ? `${url}/async` : url, {
         method: 'POST',
         redirect: 'error',
         signal,
@@ -59,7 +61,7 @@ export function createElasticClient(config: AdapterSettings, request = fetch): E
           `Elastic returned HTTP ${response.status}. ${hint}`,
         );
       }
-      if (config.showActivity) {
+      if (useStream) {
         return readElasticStream(response, config, conversationId, onActivity);
       }
       const reader = response.body?.getReader();

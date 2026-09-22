@@ -58,6 +58,31 @@ After installing this update, build once with `npm run build:data-provider && np
 
 Switching connector IDs starts a fresh Elastic conversation with the visible LibreChat transcript. Start a new LibreChat chat if you do not want to pass prior context to the new connector.
 
+## Reuse Elastic conversation titles
+
+The adapter can reuse the title Elastic emits during the first completed chat turn. It makes no additional Elastic or model request. Enable the local title lookup model in the adapter and select it for LibreChat's final title request:
+
+```yaml
+elasticAdapter:
+  # Keep your existing settings.
+  titleModel: elastic-agent-title
+
+endpoints:
+  custom:
+    - name: Elastic
+      # Keep your existing URL, headers, credentials and models.
+      titleConvo: true
+      titleModel: elastic-agent-title
+      titleMethod: completion
+      titleTiming: final
+```
+
+Merge these fields into your existing sections rather than replacing them. The two `titleModel` values must match and differ from the chat model. Do not add the title model to the selectable chat models. The example already includes this setup. After installing the update, run `npm run build:data-provider && npm run build:data-schemas && npm run build:api`, then restart both LibreChat and the adapter.
+
+Title capture uses Elastic's streaming API even if `showActivity` is false. It accepts conversation title events through the end of the completed stream, then saves the title alongside the isolated conversation mapping. LibreChat's ordinary first-turn title flow retrieves it locally; title request prompts are never forwarded to Elastic. Later agent title changes do not continually rename LibreChat chats. Final generated title saves only replace the initial `New Chat` title using an atomic database condition, so a manual rename before that save wins. Existing immediate title generation for other endpoints retains its behavior. Temporary chats skip LibreChat's title generation as before.
+
+Missing, blank, oversized or unusable titles leave the existing LibreChat title in place. There is no fallback model request. Failed/interrupted turns do not save a title, and lookups cannot access another user's, tenant's, chat's or target's mapping. The title is limited to 200 characters and passes LibreChat's existing title content policy. Adapter state files now optionally contain title text when this feature is enabled; protect them like chat metadata. Keep `TITLE_CONVO` enabled in LibreChat if you use its global title setting.
+
 ## Show live agent activity
 
 Add `showActivity: true` inside your existing `elasticAdapter` section in `librechat.yaml` (the example already enables it):
@@ -72,7 +97,7 @@ After pulling this update, run `npm run build:data-provider && npm run build:api
 
 With activity enabled, the adapter calls Elastic's `/api/agent_builder/converse/async`. Expand LibreChat's existing Thinking/Thoughts section to see Elastic's public reasoning messages, tool names and tool progress as they arrive. `▶` marks a tool invocation and `■` marks returned results (not necessarily successful results). This is an activity transcript, not a guarantee of access to the model's internal reasoning. LibreChat's existing Show Thinking setting controls automatic expansion.
 
-Activity is delivered as `reasoning_content` and uses LibreChat's existing rendering and chat persistence. Tool arguments, raw results and raw upstream error bodies are not forwarded. Public progress messages may still contain data from your agent; enabling this makes those messages visible to users and retained in their chat history. The adapter's separate state files still store only conversation IDs and history hashes. Activity is excluded from the visible transcript replayed to Elastic.
+Activity is delivered as `reasoning_content` and uses LibreChat's existing rendering and chat persistence. Tool arguments, raw results and raw upstream error bodies are not forwarded. Public progress messages may still contain data from your agent; enabling this makes those messages visible to users and retained in their chat history. The adapter's separate state files store conversation IDs, history hashes and optionally the reused title. Activity is excluded from the visible transcript replayed to Elastic.
 
 The final answer appears after Elastic completes the round. An interrupted or failed round is reported as an error without saving its conversation mapping; retrying starts fresh upstream history. No automatic retries or fallback requests are sent. Empty activity produces a normal answer without an empty panel. Non-streaming clients receive activity alongside the final answer rather than live updates.
 
@@ -86,7 +111,7 @@ Conversation mappings are scoped to Kibana URL, space, agent, API-key identity, 
 
 - Text chat and follow-ups are supported. The configured Elastic agent handles tool execution. Do not attach LibreChat tools to this endpoint; image/file attachments, tool-role messages and interactive Elastic approvals are rejected rather than silently executed or discarded.
 - With `showActivity: false`, answers use Elastic's synchronous Converse API and LibreChat receives keep-alives followed by the complete answer. With `showActivity: true`, public activity is streamed live through the asynchronous API, followed by the complete answer. Raw tool results, Kibana dashboards and interactive approval controls are not rendered.
-- Successful linear follow-ups send only the latest user message and the stored Elastic conversation ID. Mappings survive adapter restarts and contain only conversation IDs and history hashes, not message text.
+- Successful linear follow-ups send only the latest user message and the stored Elastic conversation ID. Mappings survive adapter restarts and contain conversation IDs, history hashes and optionally title text, not message bodies.
 - Editing, regenerating, branching, changing the supplied history or losing the mapping starts a fresh Elastic conversation with the visible text transcript. Past tool calls are not individually replayed. LibreChat system/developer messages are included as user-provided context, not as overrides of the Elastic agent's instructions. Model sampling controls are not applied to the agent.
 - Requests are never automatically retried by the adapter; the example disables LibreChat's provider retries. Cancelling in LibreChat aborts the HTTP request, but **does not guarantee that Elastic stops its work**. Timeout/disconnect invalidates the mapping before reuse to avoid appending to uncertain upstream state. An explicit retry may execute tools again; use read-only troubleshooting tools for this workflow.
 - One adapter process should own a state directory. Concurrent requests for the same chat receive 409; total concurrent requests are bounded by `maxConcurrent`. Run one replica for this file-backed implementation. Retain `stateDir` on a persistent volume when containerizing. Deleting a LibreChat chat does not delete its Elastic history; manage Elastic retention separately. Stop the adapter before clearing obsolete local mapping files.
@@ -102,6 +127,7 @@ All settings are validated under `elasticAdapter` in `librechat.yaml`:
 | `spaceId`              | `default`; literal or `${ENV_VAR}`                                     |
 | `connectorId`          | Optional; falls back to `ELASTIC_CONNECTOR_ID`, then Elastic's default |
 | `showActivity`         | `false`; stream public activity into LibreChat's Thinking section      |
+| `titleModel`           | Unset; optional local-only model name for reusing Elastic's title      |
 | `apiKeyEnv`            | `ELASTIC_API_KEY`                                                      |
 | `adapterKeyEnv`        | `ELASTIC_ADAPTER_KEY`                                                  |
 | `host`, `port`         | `127.0.0.1`, `3091`                                                    |

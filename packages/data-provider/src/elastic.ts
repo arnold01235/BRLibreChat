@@ -7,6 +7,7 @@ export const elasticAdapterSchema = z
     agentId: z.string().min(1),
     connectorId: z.string().optional(),
     showActivity: z.boolean().default(false),
+    titleModel: z.string().min(1).optional(),
     apiKeyEnv: z.string().min(1).default('ELASTIC_API_KEY'),
     adapterKeyEnv: z.string().min(1).default('ELASTIC_ADAPTER_KEY'),
     model: z.string().min(1).default('elastic-agent'),
@@ -18,6 +19,10 @@ export const elasticAdapterSchema = z
     maxConcurrent: z.number().int().positive().default(8),
     stateDir: z.string().min(1).default('./data/elastic-adapter'),
   })
-  .strict();
+  .strict()
+  .refine((config) => config.titleModel !== config.model, {
+    message: 'titleModel must differ from the chat model.',
+    path: ['titleModel'],
+  });
 
 export type ElasticAdapterConfig = z.infer<typeof elasticAdapterSchema>;

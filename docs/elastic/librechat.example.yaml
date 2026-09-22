@@ -13,6 +13,7 @@ elasticAdapter:
   port: 3091
   model: elastic-agent
   showActivity: true
+  titleModel: elastic-agent-title
   timeoutMs: 120000
   stateDir: ./data/elastic-adapter
 
@@ -28,7 +29,10 @@ endpoints:
         X-LibreChat-User-Id: '{{LIBRECHAT_USER_ID}}'
         X-LibreChat-Tenant-Id: '{{LIBRECHAT_USER_TENANTID}}'
         X-LibreChat-Conversation-Id: '{{LIBRECHAT_BODY_CONVERSATIONID}}'
-      titleConvo: false
+      titleConvo: true
+      titleModel: elastic-agent-title
+      titleMethod: completion
+      titleTiming: final
       modelDisplayLabel: Elastic Agent
       addParams:
         maxRetries: 0

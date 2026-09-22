@@ -126,6 +126,10 @@ beforeEach(async () => {
     event('tool_result', { tool_call_id: 'call-1', results: [{ data: 'private-results' }] });
     event('message_chunk', { text_chunk: 'Healthy' });
     event('round_complete', { round: { response: { message: 'Healthy' } } });
+    event('conversation_created', {
+      conversation_id: req.body.conversation_id ?? `elastic-${calls.length}`,
+      title: 'APM service investigation',
+    });
     res.end();
   });
   app.post('/base/s/:space/api/agent_builder/converse', async (req, res) => {
@@ -264,6 +268,61 @@ test('streaming errors are sanitized and invalidate history even after activity 
   streamFailure = false;
   await send(followup);
   expect(calls[2].body.conversation_id).toBeUndefined();
+});
+
+test('reuses the saved Elastic title without another agent call, including after restart', async () => {
+  await close(adapter);
+  config = { ...config, showActivity: false, titleModel: 'elastic-title' };
+  await startAdapter();
+  const answer = await send();
+  expect(answer.status).toBe(200);
+  expect(JSON.stringify(await answer.json())).not.toContain('reasoning_content');
+  expect(calls[0].path).toBe('/base/s/team%20ops/api/agent_builder/converse/async');
+  await close(adapter);
+  await startAdapter();
+  const titleClient = initializeModel({
+    provider: Providers.OPENAI,
+    clientOptions: {
+      model: 'elastic-title',
+      apiKey: config.adapterKey,
+      streaming: false,
+      maxRetries: 0,
+      configuration: { baseURL: `${origin}/v1`, defaultHeaders: headers },
+    },
+  });
+  const result = await titleClient.invoke('Generate a title. This text must never reach Elastic.');
+  expect(result.content).toBe('APM service investigation');
+  expect(calls).toHaveLength(1);
+  const titleRequest = { ...first, model: 'elastic-title' };
+  const otherHeaders: Record<string, string>[] = [
+    { 'X-LibreChat-User-Id': 'bob' },
+    { 'X-LibreChat-Tenant-Id': 'other' },
+    { 'X-LibreChat-Conversation-Id': 'other' },
+  ];
+  for (const other of otherHeaders) {
+    const response = await send(titleRequest, other);
+    expect(response.status).toBe(404);
+  }
+  await close(adapter);
+  config = { ...config, agentId: 'different-agent' };
+  await startAdapter();
+  expect((await send(titleRequest)).status).toBe(404);
+  expect(calls).toHaveLength(1);
+});
+
+test('title lookups cannot execute tools, consume an incomplete turn or disclose a failed turn title', async () => {
+  await close(adapter);
+  config = { ...config, titleModel: 'elastic-title' };
+  await startAdapter();
+  const titleRequest = { ...first, model: 'elastic-title' };
+  expect((await send(titleRequest)).status).toBe(404);
+  expect(calls).toHaveLength(0);
+  expect((await send({ ...titleRequest, tools: [{ type: 'function' }] })).status).toBe(400);
+  expect((await send(titleRequest, { Authorization: 'Bearer wrong' })).status).toBe(401);
+  streamFailure = true;
+  expect((await send()).status).toBe(502);
+  expect((await send(titleRequest)).status).toBe(404);
+  expect(calls).toHaveLength(1);
 });
 
 test('cancelling a live activity stream closes the Elastic connection', async () => {

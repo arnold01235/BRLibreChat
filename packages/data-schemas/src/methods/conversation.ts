@@ -270,6 +270,8 @@ export interface ConversationMethods {
       context?: string;
       unsetFields?: Record<string, number>;
       noUpsert?: boolean;
+      /** Compare-and-set for generated titles; a mismatch must never upsert. */
+      expectedTitle?: string;
       createdAtOnInsert?: Date;
       preserveUpdatedAt?: boolean;
       /** Same-tenant persisted agent already resolved by the request layer. */
@@ -2175,6 +2177,7 @@ export function createConversationMethods(
       context?: string;
       unsetFields?: Record<string, number>;
       noUpsert?: boolean;
+      expectedTitle?: string;
       createdAtOnInsert?: Date;
       preserveUpdatedAt?: boolean;
       initialAgentId?: string | null;
@@ -2320,7 +2323,7 @@ export function createConversationMethods(
         timestampOptions.timestamps = false;
       }
 
-      const canUpsert = metadata?.noUpsert !== true;
+      const canUpsert = metadata?.noUpsert !== true && metadata?.expectedTitle === undefined;
       const initialAgentId =
         canUpsert &&
         typeof metadata?.initialAgentId === 'string' &&
@@ -2349,7 +2352,11 @@ export function createConversationMethods(
         return operation;
       };
 
-      const baseFilter = { conversationId, user: userId };
+      const baseFilter = {
+        conversationId,
+        user: userId,
+        ...(metadata?.expectedTitle !== undefined ? { title: metadata.expectedTitle } : {}),
+      };
       const runUpdate = (
         filter: Record<string, unknown>,
         operation: Record<string, unknown>,
