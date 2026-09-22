@@ -113,7 +113,7 @@ export function createAdapterApp(
       const id = `chatcmpl-${randomUUID()}`;
       const created = Math.floor(Date.now() / 1000);
       const chunk = (
-        delta: { role?: string; content?: string },
+        delta: { role?: string; content?: string; reasoning_content?: string },
         finish: 'stop' | null = null,
       ): string =>
         `data: ${JSON.stringify({
@@ -135,10 +135,21 @@ export function createAdapterApp(
           res.write(': keep-alive\n\n');
         }, 10000);
       }
+      let activity = '';
       const reply = await client.converse(
         input,
         continues ? previous?.conversationId : undefined,
         controller.signal,
+        config.showActivity
+          ? (text) => {
+              controller.signal.throwIfAborted();
+              if (parsed.data.stream) {
+                res.write(chunk({ reasoning_content: text }));
+              } else {
+                activity += text;
+              }
+            }
+          : undefined,
       );
       controller.signal.throwIfAborted();
       await store.write(key, {
@@ -161,7 +172,11 @@ export function createAdapterApp(
           choices: [
             {
               index: 0,
-              message: { role: 'assistant', content: reply.response.message },
+              message: {
+                role: 'assistant',
+                content: reply.response.message,
+                ...(activity ? { reasoning_content: activity } : {}),
+              },
               finish_reason: 'stop',
             },
           ],

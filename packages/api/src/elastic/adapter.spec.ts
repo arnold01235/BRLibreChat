@@ -4,8 +4,10 @@ import path from 'node:path';
 import express from 'express';
 import { load } from 'js-yaml';
 import { once } from 'node:events';
+import { initializeModel, Providers } from '@librechat/agents';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { elasticAdapterSchema, configSchema } from 'librechat-data-provider';
+import type { AIMessageChunk } from '@librechat/agents';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import type { AdapterSettings } from './config';
@@ -47,6 +49,8 @@ let upstreamStatus: number;
 let upstreamDelay: number;
 let malformed: boolean;
 let upstreamClosed: boolean;
+let releaseStream: (() => void) | undefined;
+let streamFailure: boolean;
 
 async function listen(app: express.Express): Promise<Server> {
   const server = app.listen(0, '127.0.0.1');
@@ -82,8 +86,48 @@ beforeEach(async () => {
   upstreamDelay = 0;
   malformed = false;
   upstreamClosed = false;
+  releaseStream = undefined;
+  streamFailure = false;
   const app = express();
   app.use(express.json());
+  app.post('/base/s/:space/api/agent_builder/converse/async', async (req, res) => {
+    calls.push({ path: req.originalUrl, body: req.body });
+    res.set('Content-Type', 'text/event-stream');
+    res.on('close', () => {
+      upstreamClosed = true;
+    });
+    const event = (name: string, data: object): void => {
+      res.write(`event: ${name}\ndata: ${JSON.stringify({ data })}\n\n`);
+    };
+    event('conversation_id_set', {
+      conversation_id: req.body.conversation_id ?? `elastic-${calls.length}`,
+    });
+    event('reasoning', { reasoning: 'Checking APM data' });
+    event('tool_call', {
+      tool_call_id: 'call-1',
+      tool_id: 'platform.core.search',
+      params: { secret: 'private-parameters' },
+    });
+    event('tool_progress', { tool_call_id: 'call-1', message: 'Searching traces' });
+    if (upstreamDelay) {
+      await new Promise<void>((resolve) => {
+        releaseStream = resolve;
+        res.on('close', resolve);
+      });
+    }
+    if (res.destroyed) {
+      return;
+    }
+    if (streamFailure) {
+      event('error', { message: 'private-upstream-error' });
+      res.end();
+      return;
+    }
+    event('tool_result', { tool_call_id: 'call-1', results: [{ data: 'private-results' }] });
+    event('message_chunk', { text_chunk: 'Healthy' });
+    event('round_complete', { round: { response: { message: 'Healthy' } } });
+    res.end();
+  });
   app.post('/base/s/:space/api/agent_builder/converse', async (req, res) => {
     calls.push({
       path: req.originalUrl,
@@ -141,6 +185,113 @@ test('scopes the request to the team space and returns an OpenAI answer', async 
       body: { agent_id: 'troubleshooter', input: 'Check service A' },
     },
   ]);
+});
+
+test('LibreChat model receives live thinking before the final answer and retains follow-up history', async () => {
+  await close(adapter);
+  config = { ...config, showActivity: true, connectorId: 'connector-a' };
+  await startAdapter();
+  upstreamDelay = 1;
+  const model = initializeModel({
+    provider: Providers.OPENAI,
+    clientOptions: {
+      model: config.model,
+      apiKey: config.adapterKey,
+      streaming: true,
+      streamUsage: false,
+      maxRetries: 0,
+      configuration: { baseURL: `${origin}/v1`, defaultHeaders: headers },
+    },
+  });
+  let reasoning = '';
+  let answer = '';
+  let sawLiveActivity = false;
+  const stream = await model.stream('Check service A');
+  for await (const value of stream) {
+    const part = value as AIMessageChunk;
+    const activity = part.additional_kwargs.reasoning_content;
+    if (typeof activity === 'string') {
+      reasoning += activity;
+      if (!sawLiveActivity && reasoning.includes('Searching traces')) {
+        expect(answer).toBe('');
+        expect(upstreamClosed).toBe(false);
+        sawLiveActivity = true;
+        releaseStream?.();
+      }
+    }
+    if (typeof part.content === 'string') {
+      answer += part.content;
+    }
+  }
+  expect(reasoning).toContain('Checking APM data');
+  expect(reasoning).toContain('▶ platform.core.search');
+  expect(reasoning).toContain('■ platform.core.search');
+  expect(reasoning).not.toContain('private-');
+  expect(answer).toBe('Healthy');
+  expect(sawLiveActivity).toBe(true);
+  expect(calls[0].body.connector_id).toBe('connector-a');
+  upstreamDelay = 0;
+  await close(adapter);
+  await startAdapter();
+  const response = await send(followup);
+  expect(response.status).toBe(200);
+  expect(calls[1].body.conversation_id).toBe('elastic-1');
+  expect(calls[1].body.input).toBe('Why?');
+  expect(await response.json()).toMatchObject({
+    choices: [
+      {
+        message: {
+          content: 'Healthy',
+          reasoning_content: expect.stringContaining('Checking APM data'),
+        },
+      },
+    ],
+  });
+});
+
+test('streaming errors are sanitized and invalidate history even after activity was displayed', async () => {
+  await close(adapter);
+  config = { ...config, showActivity: true };
+  await startAdapter();
+  await send();
+  streamFailure = true;
+  const response = await send({ ...followup, stream: true });
+  const body = await response.text();
+  expect(body).toContain('Checking APM data');
+  expect(body).toContain('Elastic reported a streaming error');
+  expect(body).not.toContain('private-upstream-error');
+  expect(body).not.toContain('[DONE]');
+  streamFailure = false;
+  await send(followup);
+  expect(calls[2].body.conversation_id).toBeUndefined();
+});
+
+test('cancelling a live activity stream closes the Elastic connection', async () => {
+  await close(adapter);
+  config = { ...config, showActivity: true };
+  await startAdapter();
+  upstreamDelay = 1;
+  const controller = new AbortController();
+  const response = await fetch(`${origin}/v1/chat/completions`, {
+    method: 'POST',
+    headers,
+    signal: controller.signal,
+    body: JSON.stringify({ ...first, stream: true }),
+  });
+  const reader = response.body!.getReader();
+  let text = '';
+  while (!text.includes('Searching traces')) {
+    const part = await reader.read();
+    if (part.done) {
+      throw new Error('No activity received');
+    }
+    text += new TextDecoder().decode(part.value);
+  }
+  controller.abort();
+  for (let i = 0; i < 100 && !upstreamClosed; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  expect(upstreamClosed).toBe(true);
 });
 
 test('preserves linear history after an adapter restart and forwards only the new input', async () => {
@@ -293,14 +444,17 @@ test('rejects simultaneous turns on one chat and accepts a retry after completio
   expect((await send(followup)).status).toBe(200);
 });
 
-test('times out without retrying Elastic', async () => {
-  await close(adapter);
-  config = { ...config, timeoutMs: 40 };
-  await startAdapter();
-  upstreamDelay = 100;
-  expect((await send()).status).toBe(504);
-  expect(calls).toHaveLength(1);
-});
+test.each([false, true])(
+  'times out without retrying Elastic (activity: %s)',
+  async (showActivity) => {
+    await close(adapter);
+    config = { ...config, timeoutMs: 40, showActivity };
+    await startAdapter();
+    upstreamDelay = 100;
+    expect((await send()).status).toBe(504);
+    expect(calls).toHaveLength(1);
+  },
+);
 
 test('client cancellation closes the upstream request', async () => {
   upstreamDelay = 100;

@@ -12,6 +12,7 @@ elasticAdapter:
   host: 127.0.0.1
   port: 3091
   model: elastic-agent
+  showActivity: true
   timeoutMs: 120000
   stateDir: ./data/elastic-adapter
 
