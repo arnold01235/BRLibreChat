@@ -1,47 +1,24 @@
-# Brreg interface
+# Brreg colour theme
 
-This fork applies Brreg-inspired visual styling to LibreChat. All original product names, wording, translations, greetings and configured conversation starters are retained. It is a first design pass, not a claim of formal brand approval or completed accessibility certification.
+This change applies Brreg-inspired light and dark colours through LibreChat's existing semantic theme tokens. It changes only colours: the original logos, icons, layouts, typography, control shapes, text, translations and application title are retained. No new dependencies are required.
 
-## Run locally
+## Maintenance
 
-Use Node 24 and the normal LibreChat services/configuration. For a fresh installation, copy `.env.example` to `.env` and configure MongoDB and your model endpoints. Keep the existing application title and language configuration.
+`client/src/branding/theme.ts` defines the palette. `client/src/App.jsx` supplies it as the default for installations without a saved custom palette. Existing environment colour overrides and valid saved palettes take precedence; dark/light/system and high-contrast preferences remain supported. The default deployment palette is not written to local storage.
+
+Use the existing LibreChat configuration and rebuild the frontend or your deployment image to apply the colours.
 
 ```sh
 npm ci
 npm run frontend
-npm run backend
 ```
 
-For frontend development with the backend running separately:
+## Colour sources
 
-```sh
-npm run frontend:dev
-```
-
-Language selection and browser-language detection are unchanged. Rebuild your own image when deploying; an upstream LibreChat image will not contain this fork's frontend.
-
-## Design and maintenance
-
-- `client/src/branding/theme.ts`: versioned semantic light/dark colour and appearance tokens. New installations receive the brand theme. Existing valid saved custom palettes and `REACT_APP_THEME_*` overrides retain precedence. Saved light/dark/system and high-contrast preferences continue to work. The deployment palette is not written into local storage.
-- `client/src/branding/Brand.tsx`: locally hosted Brreg logo. The logo remains on a white plate in dark mode, keeping the original artwork intact.
-- Login, conversation sidebar, welcome screen and chat header compose the existing LibreChat primitives. No translation files or user-facing copy are changed.
-- Backend authentication, permissions, model selection and integrations retain their existing behavior. Configure your organisation's authentication separately.
-- The Designsystemet approach informs the semantic tokens and restrained layout. This pass does not replace LibreChat's component system with Digdir's React library. That migration would require a separate scope.
-
-## Asset sources
-
-Retrieved 2026-09-21:
-
-- Logo: https://scf.brreg.no/bilder/brreg_logo.svg (vendored unchanged under `client/public/assets/branding/`).
-- Public website colours: https://scf.brreg.no/css/br.css?v=22 — blue `#00688e`, pale blues `#89d6f6` and `#bce6fa`, text `#333333`. Additional neutral shades and the dark palette are adaptations for this application, not official brand specifications.
-- Website typography: https://scf.brreg.no/css/framework.css?v=67 — Inter. LibreChat already self-hosts Inter; no external font request was added.
-- Icons: https://aksel.nav.no/komponenter/ikoner — `@navikt/aksel-icons` (MIT).
-- Design guidance: https://designsystemet.no/en.
-
-Confirm the artwork and final presentation with the internal brand owner before a production rollout. Existing LibreChat attribution and licence files are retained.
+Brreg's public website stylesheet https://scf.brreg.no/css/br.css?v=22 supplies blue `#00688e`, pale blue `#bce6fa` and text `#333333`. Additional neutrals and the dark palette are application-specific adaptations, not official brand specifications. No Brreg artwork is included.
 
 ## Verification
 
-The frontend production build, frontend TypeScript check, ESLint and focused tests are used to verify the change. The initial visual pass was inspected in Chromium with mocked API responses. This revision removes the added text and starter cards and restores all original wording; new screenshots have not been generated. These previews do not verify a live backend or model connection. Brand tests check normal text/link contrast against the main and sidebar surfaces in both colour schemes and saved-palette compatibility.
+The palette tests check text/link contrast on main and sidebar surfaces in both modes, theme validation and compatibility with saved palettes. The frontend build, TypeScript check and focused tests are the local checks for this change.
 
-The required Lighthouse command was attempted. Its temporary MongoDB process failed with `open: Operation not permitted` in the execution environment before the browser audit could run. Run `npm run lighthouse` in a development environment that can start MongoDB before merging.
+The earlier Lighthouse attempt failed before auditing because temporary MongoDB could not start (`open: Operation not permitted`). Run that gate in a compatible environment before merging. Previous screenshots include superseded changes and do not represent this colours-only revision.

@@ -1,12 +1,5 @@
 import { fromLegacyTheme, validateThemeDefinition } from '@librechat/client';
-import type { IThemeAppearance, ThemeDefinition } from '@librechat/client';
-
-const appearance: Partial<IThemeAppearance> = {
-  controlRadius: '0.375rem',
-  surfaceRadius: '0.75rem',
-  largeSurfaceRadius: '1rem',
-  fontFamily: 'Inter, Arial, sans-serif',
-};
+import type { ThemeDefinition } from '@librechat/client';
 
 /** Brreg website colours mapped onto LibreChat's versioned semantic tokens. */
 export const brregTheme: ThemeDefinition = {
@@ -14,7 +7,6 @@ export const brregTheme: ThemeDefinition = {
   name: 'brreg',
   modes: {
     light: {
-      appearance,
       colors: {
         'rgb-text-primary': '51 51 51',
         'rgb-text-secondary': '69 85 94',
@@ -43,7 +35,6 @@ export const brregTheme: ThemeDefinition = {
       },
     },
     dark: {
-      appearance,
       colors: {
         'rgb-text-primary': '235 244 248',
         'rgb-text-secondary': '190 209 219',

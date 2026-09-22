@@ -23,7 +23,6 @@ import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
 import { Conversations } from '~/components/Conversations';
 import { collectPinnedConversations } from '~/utils';
 import SearchBar from '~/components/Nav/SearchBar';
-import Brand from '~/branding/Brand';
 import store from '~/store';
 
 const chatsHeaderTrailing = <ChatFilterMenu />;
@@ -181,9 +180,6 @@ const ConversationsSection = memo(() => {
       role="region"
       aria-label={localize('com_ui_chat_history')}
     >
-      <div className="mb-5 px-3 pt-3">
-        <Brand compact />
-      </div>
       {/* The search field owns this row alone; filtering and ordering moved beside the
           Chats heading, where the list they act on is labelled. On mobile the field
           itself lives in the drawer's bottom bar, within thumb reach. */}
